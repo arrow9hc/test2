@@ -13,30 +13,31 @@ YELLOW='\033[1;33m'
 BLUE='\033[0;34m'
 NC='\033[0m' # No Color
 
-# Report variables
-REPORT=""
 WEBSITES_FOUND=0
 
-# Initialize report
-init_report() {
-    REPORT="========================================\n"
-    REPORT+="       Linux Server Website Deployment Report\n"
-    REPORT+="========================================\n"
-    REPORT+="Detection Time: $(date '+%Y-%m-%d %H:%M:%S')\n"
-    REPORT+="Hostname: $(hostname)\n"
-    REPORT+="IP Address: $(hostname -I | awk '{print $1}')\n"
-    REPORT+="========================================\n\n"
+# Print section header
+print_header() {
+    echo -e "${BLUE}$1${NC}"
 }
 
-# Print and append to report
-add_to_report() {
-    echo -e "$1"
-    REPORT+="$1\n"
+# Print success message
+print_success() {
+    echo -e "${GREEN}$1${NC}"
+}
+
+# Print warning message
+print_warning() {
+    echo -e "${YELLOW}$1${NC}"
+}
+
+# Print error message
+print_error() {
+    echo -e "${RED}$1${NC}"
 }
 
 # Detect web server type
 detect_web_server() {
-    add_to_report "${BLUE}[1/6] Detecting web server type...${NC}"
+    print_header "[1/6] Detecting web server type..."
     
     local web_servers=()
     
@@ -49,40 +50,42 @@ detect_web_server() {
     fi
     
     if [ ${#web_servers[@]} -eq 0 ]; then
-        add_to_report "${RED}❌ No Nginx or Apache service detected${NC}"
-        add_to_report "Note: May be using other web servers (Tomcat, Node.js, etc.) or no website deployed\n"
+        print_error "❌ No Nginx or Apache service detected"
+        echo -e "Note: May be using other web servers (Tomcat, Node.js, etc.) or no website deployed\n"
         return 1
     fi
     
-    add_to_report "${GREEN}✅ Detected web servers: ${web_servers[*]}${NC}\n"
+    print_success "✅ Detected web servers: ${web_servers[*]}"
+    echo ""
     return 0
 }
 
 # Check listening ports
 check_ports() {
-    add_to_report "${BLUE}[2/6] Checking web port listening status...${NC}"
+    print_header "[2/6] Checking web port listening status..."
     
     if command -v netstat &> /dev/null; then
         local ports=$(sudo netstat -tlnp 2>/dev/null | grep -E ':80|:443' | awk '{print $4}' | sed 's/.*://' | sort -u)
     elif command -v ss &> /dev/null; then
         local ports=$(sudo ss -tlnp 2>/dev/null | grep -E ':80|:443' | awk '{print $4}' | sed 's/.*://' | sort -u)
     else
-        add_to_report "${YELLOW}⚠️  Unable to check port status (netstat/ss not available)${NC}\n"
+        print_warning "⚠️  Unable to check port status (netstat/ss not available)"
+        echo ""
         return
     fi
     
     if [ -n "$ports" ]; then
         for port in $ports; do
             if [ "$port" = "80" ]; then
-                add_to_report "${GREEN}✅ HTTP (port 80) is listening${NC}"
+                print_success "✅ HTTP (port 80) is listening"
             elif [ "$port" = "443" ]; then
-                add_to_report "${GREEN}✅ HTTPS (port 443) is listening${NC}"
+                print_success "✅ HTTPS (port 443) is listening"
             fi
         done
     else
-        add_to_report "${YELLOW}⚠️  No listening services detected on ports 80/443${NC}"
+        print_warning "⚠️  No listening services detected on ports 80/443"
     fi
-    add_to_report ""
+    echo ""
 }
 
 # Detect Nginx sites
@@ -95,9 +98,8 @@ detect_nginx_sites() {
     
     for config_path in "${config_paths[@]}"; do
         if [ -e "$config_path" ]; then
-            add_to_report "${BLUE}[3/6] Analyzing Nginx configuration (${config_path})...${NC}"
+            print_header "[3/6] Analyzing Nginx configuration (${config_path})..."
             
-            # Find server_name and root
             local temp_file=$(mktemp)
             sudo grep -r -E "server_name|root" "$config_path" 2>/dev/null | grep -v "^#" > "$temp_file"
             
@@ -114,24 +116,22 @@ detect_nginx_sites() {
                         
                         if [ -n "$current_root" ] && [ -d "$current_root" ]; then
                             WEBSITES_FOUND=$((WEBSITES_FOUND + 1))
-                            add_to_report "${GREEN}📍 Website #${WEBSITES_FOUND}${NC}"
-                            add_to_report "  Type: Nginx"
-                            [ -n "$current_server" ] && [ "$current_server" != "_" ] && add_to_report "  Domain: $current_server"
-                            add_to_report "  Path: $current_root"
+                            echo ""
+                            print_success "📍 Website #${WEBSITES_FOUND}"
+                            echo "  Type: Nginx"
+                            [ -n "$current_server" ] && [ "$current_server" != "_" ] && echo "  Domain: $current_server"
+                            echo "  Path: $current_root"
                             
-                            # Check directory contents
                             local file_count=$(find "$current_root" -maxdepth 1 -type f 2>/dev/null | wc -l)
-                            add_to_report "  File count: $file_count (excluding subdirectories)"
+                            echo "  File count: $file_count (excluding subdirectories)"
                             
-                            # Check entry files
                             if [ -f "$current_root/index.html" ]; then
-                                add_to_report "  Entry file: index.html ✓"
+                                echo "  Entry file: index.html ✓"
                             elif [ -f "$current_root/index.php" ]; then
-                                add_to_report "  Entry file: index.php ✓"
+                                echo "  Entry file: index.php ✓"
                             elif [ -f "$current_root/index.htm" ]; then
-                                add_to_report "  Entry file: index.htm ✓"
+                                echo "  Entry file: index.htm ✓"
                             fi
-                            add_to_report ""
                             
                             current_server=""
                             current_root=""
@@ -139,8 +139,10 @@ detect_nginx_sites() {
                     fi
                 done < "$temp_file"
                 rm "$temp_file"
+                echo ""
             else
-                add_to_report "${YELLOW}⚠️  No valid site configurations found${NC}\n"
+                print_warning "⚠️  No valid site configurations found"
+                echo ""
             fi
             break
         fi
@@ -157,9 +159,8 @@ detect_apache_sites() {
     
     for config_path in "${config_paths[@]}"; do
         if [ -e "$config_path" ]; then
-            add_to_report "${BLUE}[4/6] Analyzing Apache configuration (${config_path})...${NC}"
+            print_header "[4/6] Analyzing Apache configuration (${config_path})..."
             
-            # Find DocumentRoot and ServerName
             local temp_file=$(mktemp)
             sudo grep -r -E "DocumentRoot|ServerName" "$config_path" 2>/dev/null | grep -v "^#" > "$temp_file"
             
@@ -176,24 +177,22 @@ detect_apache_sites() {
                         
                         if [ -n "$current_root" ] && [ -d "$current_root" ]; then
                             WEBSITES_FOUND=$((WEBSITES_FOUND + 1))
-                            add_to_report "${GREEN}📍 Website #${WEBSITES_FOUND}${NC}"
-                            add_to_report "  Type: Apache"
-                            [ -n "$current_server" ] && add_to_report "  Domain: $current_server"
-                            add_to_report "  Path: $current_root"
+                            echo ""
+                            print_success "📍 Website #${WEBSITES_FOUND}"
+                            echo "  Type: Apache"
+                            [ -n "$current_server" ] && echo "  Domain: $current_server"
+                            echo "  Path: $current_root"
                             
-                            # Check directory contents
                             local file_count=$(find "$current_root" -maxdepth 1 -type f 2>/dev/null | wc -l)
-                            add_to_report "  File count: $file_count (excluding subdirectories)"
+                            echo "  File count: $file_count (excluding subdirectories)"
                             
-                            # Check entry files
                             if [ -f "$current_root/index.html" ]; then
-                                add_to_report "  Entry file: index.html ✓"
+                                echo "  Entry file: index.html ✓"
                             elif [ -f "$current_root/index.php" ]; then
-                                add_to_report "  Entry file: index.php ✓"
+                                echo "  Entry file: index.php ✓"
                             elif [ -f "$current_root/index.htm" ]; then
-                                add_to_report "  Entry file: index.htm ✓"
+                                echo "  Entry file: index.htm ✓"
                             fi
-                            add_to_report ""
                             
                             current_server=""
                             current_root=""
@@ -201,8 +200,10 @@ detect_apache_sites() {
                     fi
                 done < "$temp_file"
                 rm "$temp_file"
+                echo ""
             else
-                add_to_report "${YELLOW}⚠️  No valid site configurations found${NC}\n"
+                print_warning "⚠️  No valid site configurations found"
+                echo ""
             fi
             break
         fi
@@ -211,7 +212,7 @@ detect_apache_sites() {
 
 # Check common default directories
 check_default_directories() {
-    add_to_report "${BLUE}[5/6] Checking common default website directories...${NC}"
+    print_header "[5/6] Checking common default website directories..."
     
     local default_dirs=(
         "/var/www/html"
@@ -220,36 +221,42 @@ check_default_directories() {
         "/home/*/public_html"
     )
     
+    local found=0
     for dir in "${default_dirs[@]}"; do
-        # Handle wildcards
         if [[ "$dir" == *"*"* ]]; then
             for expanded_dir in $dir; do
                 if [ -d "$expanded_dir" ] && [ "$(ls -A "$expanded_dir" 2>/dev/null)" ]; then
-                    add_to_report "${GREEN}📁 Found website directory: $expanded_dir${NC}"
-                    add_to_report "  File preview: $(ls -la "$expanded_dir" 2>/dev/null | head -5 | tail -3 | awk '{print "    " $NF}')"
+                    print_success "📁 Found website directory: $expanded_dir"
+                    echo "  File preview: $(ls -la "$expanded_dir" 2>/dev/null | head -5 | tail -3 | awk '{print "    " $NF}')"
+                    found=1
                 fi
             done
         else
             if [ -d "$dir" ] && [ "$(ls -A "$dir" 2>/dev/null)" ]; then
-                add_to_report "${GREEN}📁 Found website directory: $dir${NC}"
-                add_to_report "  File preview: $(ls -la "$dir" 2>/dev/null | head -5 | tail -3 | awk '{print "    " $NF}')"
+                print_success "📁 Found website directory: $dir"
+                echo "  File preview: $(ls -la "$dir" 2>/dev/null | head -5 | tail -3 | awk '{print "    " $NF}')"
+                found=1
             fi
         fi
     done
-    add_to_report ""
+    
+    if [ $found -eq 0 ]; then
+        print_warning "⚠️  No common default directories found"
+    fi
+    echo ""
 }
 
 # Check service status
 check_service_status() {
-    add_to_report "${BLUE}[6/6] Checking web service running status...${NC}"
+    print_header "[6/6] Checking web service running status..."
     
     # Check Nginx
     if systemctl list-units --type=service 2>/dev/null | grep -q "nginx.service"; then
         local nginx_status=$(systemctl is-active nginx 2>/dev/null)
         if [ "$nginx_status" = "active" ]; then
-            add_to_report "${GREEN}✅ Nginx service: Running${NC}"
+            print_success "✅ Nginx service: Running"
         else
-            add_to_report "${RED}❌ Nginx service: $nginx_status${NC}"
+            print_error "❌ Nginx service: $nginx_status"
         fi
     fi
     
@@ -259,58 +266,65 @@ check_service_status() {
         [ -f "/usr/lib/systemd/system/httpd.service" ] && apache_service="httpd"
         local apache_status=$(systemctl is-active $apache_service 2>/dev/null)
         if [ "$apache_status" = "active" ]; then
-            add_to_report "${GREEN}✅ Apache service: Running${NC}"
+            print_success "✅ Apache service: Running"
         else
-            add_to_report "${RED}❌ Apache service: $apache_status${NC}"
+            print_error "❌ Apache service: $apache_status"
         fi
     fi
     
-    add_to_report ""
+    echo ""
 }
 
 # Generate final summary
 generate_summary() {
-    add_to_report "${BLUE}════════════════════════════════════════${NC}"
-    add_to_report "${BLUE}             Detection Summary${NC}"
-    add_to_report "${BLUE}════════════════════════════════════════${NC}"
+    echo -e "${BLUE}════════════════════════════════════════${NC}"
+    echo -e "${BLUE}             Detection Summary${NC}"
+    echo -e "${BLUE}════════════════════════════════════════${NC}"
     
     if [ $WEBSITES_FOUND -eq 0 ]; then
-        add_to_report "${YELLOW}⚠️  No clear website deployment detected${NC}"
-        add_to_report ""
-        add_to_report "Possible reasons:"
-        add_to_report "  1. Website deployed in non-standard directory"
-        add_to_report "  2. Using containerized deployment (Docker/K8s)"
-        add_to_report "  3. Using other web servers (Tomcat/Node.js/Python, etc.)"
-        add_to_report "  4. Permission restrictions prevent reading config files"
-        add_to_report ""
-        add_to_report "Suggested commands for further investigation:"
-        add_to_report "  • ps aux | grep -E 'nginx|apache|httpd|java|node|python'"
-        add_to_report "  • docker ps (if Docker is installed)"
-        add_to_report "  • find / -name '*.conf' -path '*/nginx/*' 2>/dev/null"
+        print_warning "⚠️  No clear website deployment detected"
+        echo ""
+        echo "Possible reasons:"
+        echo "  1. Website deployed in non-standard directory"
+        echo "  2. Using containerized deployment (Docker/K8s)"
+        echo "  3. Using other web servers (Tomcat/Node.js/Python, etc.)"
+        echo "  4. Permission restrictions prevent reading config files"
+        echo ""
+        echo "Suggested commands for further investigation:"
+        echo "  • ps aux | grep -E 'nginx|apache|httpd|java|node|python'"
+        echo "  • docker ps (if Docker is installed)"
+        echo "  • find / -name '*.conf' -path '*/nginx/*' 2>/dev/null"
     else
-        add_to_report "${GREEN}✅ Total $WEBSITES_FOUND website(s) deployed${NC}"
-        add_to_report ""
-        add_to_report "All website configuration file locations:"
-        [ -d "/etc/nginx" ] && add_to_report "  • Nginx: /etc/nginx/"
-        [ -d "/etc/apache2" ] && add_to_report "  • Apache: /etc/apache2/"
-        [ -d "/etc/httpd" ] && add_to_report "  • Apache: /etc/httpd/"
+        print_success "✅ Total $WEBSITES_FOUND website(s) deployed"
+        echo ""
+        echo "All website configuration file locations:"
+        [ -d "/etc/nginx" ] && echo "  • Nginx: /etc/nginx/"
+        [ -d "/etc/apache2" ] && echo "  • Apache: /etc/apache2/"
+        [ -d "/etc/httpd" ] && echo "  • Apache: /etc/httpd/"
     fi
     
-    add_to_report ""
-    add_to_report "========================================"
-    add_to_report "           Report Complete"
-    add_to_report "========================================"
+    echo ""
+    echo -e "${BLUE}========================================${NC}"
+    echo -e "${BLUE}           Detection Complete${NC}"
+    echo -e "${BLUE}========================================${NC}"
 }
 
 # Main function
 main() {
     # Check for sudo privileges
     if [ "$EUID" -ne 0 ]; then 
-        echo -e "${YELLOW}⚠️  Note: Some features require root privileges. It's recommended to run this script with sudo${NC}"
-        echo -e "${YELLOW}Hint: Please run 'sudo bash $0' for complete detection results\n${NC}"
+        print_warning "⚠️  Note: Some features require root privileges. It's recommended to run this script with sudo"
+        echo -e "Hint: Please run 'sudo bash $0' for complete detection results\n"
     fi
     
-    init_report
+    echo -e "${BLUE}========================================${NC}"
+    echo -e "${BLUE}   Linux Server Website Detection Tool${NC}"
+    echo -e "${BLUE}========================================${NC}"
+    echo -e "Detection Time: $(date '+%Y-%m-%d %H:%M:%S')"
+    echo -e "Hostname: $(hostname)"
+    echo -e "IP Address: $(hostname -I | awk '{print $1}')"
+    echo -e "${BLUE}========================================${NC}"
+    echo ""
     
     # Run detection
     if detect_web_server; then
@@ -322,19 +336,6 @@ main() {
     check_default_directories
     check_service_status
     generate_summary
-    
-    # Save report to file
-    local report_file="/tmp/web_detect_report_$(date +%Y%m%d_%H%M%S).txt"
-    echo -e "$REPORT" > "$report_file"
-    echo -e "\n${GREEN}📄 Complete report saved to: $report_file${NC}"
-    
-    # Ask to save to home directory
-    echo -e "\n${YELLOW}Save report to home directory? [y/N]${NC}"
-    read -r save_to_home
-    if [[ "$save_to_home" =~ ^[Yy]$ ]]; then
-        cp "$report_file" ~/web_detect_report.txt
-        echo -e "${GREEN}✅ Report saved to: ~/web_detect_report.txt${NC}"
-    fi
 }
 
 # Run main function
