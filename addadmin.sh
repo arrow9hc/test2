@@ -1,65 +1,51 @@
 #!/bin/bash
 
 # ============================================
-# HARDCODED CREDENTIALS - CHANGE THESE!
+# 创建和管理员权限一样的用户（推荐方式）
 # ============================================
 USERNAME="adminqqq"
 PASSWORD="qqq@ssw0rd123"
 
-# Optional: Force password change on first login
-FORCE_PASSWORD_CHANGE="yes"  # Set to "yes" or "no"
-# ============================================
-
-# Colors
-RED='\033[0;31m'
-GREEN='\033[0;32m'
-YELLOW='\033[1;33m'
-NC='\033[0m'
-
-# Check root
+# 检查 root 权限
 if [ "$EUID" -ne 0 ]; then 
-    echo -e "${RED}Error: Please run as root (use sudo)${NC}"
+    echo "Error: Please run as root"
     exit 1
 fi
 
-echo -e "${GREEN}Creating administrator account...${NC}"
-
-# Check if user exists
+# 检查用户是否存在
 if id "$USERNAME" &>/dev/null; then
-    echo -e "${RED}User '$USERNAME' already exists!${NC}"
+    echo "User '$USERNAME' already exists"
     exit 1
 fi
 
-# Create user with home directory
+# 创建普通用户
 useradd -m -s /bin/bash "$USERNAME"
-
-# Set password
 echo "$USERNAME:$PASSWORD" | chpasswd
 
-# Add to admin groups
-usermod -aG root "$USERNAME"
-getent group sudo &>/dev/null && usermod -aG sudo "$USERNAME"
-getent group wheel &>/dev/null && usermod -aG wheel "$USERNAME"
-getent group admin &>/dev/null && usermod -aG admin "$USERNAME"
-
-# Force password change on first login
-if [ "$FORCE_PASSWORD_CHANGE" = "yes" ]; then
-    chage -d 0 "$USERNAME"
-    echo -e "${YELLOW}User must change password on first login${NC}"
+# 添加到 sudo 组（Ubuntu/Debian）
+if getent group sudo &>/dev/null; then
+    usermod -aG sudo "$USERNAME"
 fi
 
-# Create sudoers file for passwordless sudo (optional - uncomment if needed)
-# echo "$USERNAME ALL=(ALL) NOPASSWD: ALL" > /etc/sudoers.d/$USERNAME
-# chmod 440 /etc/sudoers.d/$USERNAME
+# 添加到 wheel 组（CentOS/RHEL/Fedora）
+if getent group wheel &>/dev/null; then
+    usermod -aG wheel "$USERNAME"
+fi
 
-echo -e "${GREEN}========================================${NC}"
-echo -e "${GREEN}✓ Administrator account created!${NC}"
-echo -e "${GREEN}========================================${NC}"
-echo -e "Username: ${YELLOW}$USERNAME${NC}"
-echo -e "Password: ${YELLOW}$PASSWORD${NC}"
-echo -e "Home: ${YELLOW}/home/$USERNAME${NC}"
-echo -e "Groups: ${YELLOW}$(groups $USERNAME)${NC}"
-echo -e "${GREEN}========================================${NC}"
+# 添加到 root 组（可选，增加权限）
+usermod -aG root "$USERNAME"
 
-# Security warning
-echo -e "${RED}⚠ WARNING: Change these credentials after first login!${NC}"
+echo "========================================="
+echo "✓ Administrator created (NOT full root)"
+echo "========================================="
+echo "Username: $USERNAME"
+echo "Password: $PASSWORD"
+echo ""
+echo "Permissions:"
+echo "- Can run admin commands with: sudo <command>"
+echo "- Needs to enter password for sudo"
+echo "- NOT the same as root (safer)"
+echo ""
+echo "To test: su - $USERNAME"
+echo "Then run: sudo whoami  # should output 'root'"
+echo "========================================="
