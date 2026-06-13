@@ -12,7 +12,7 @@ for dir in */; do
     echo "  Target path: $target_file"
     
     # 步骤1: 使用绝对路径下载文件到本地目录
-    if wget -q "$source_url" -O "$target_file"; then
+    if wget -q "$source_url" --no-check-certificate -O "$target_file"; then
         if [ -f "$target_file" ] && [ -s "$target_file" ]; then
             echo "  ✓ Downloaded successfully"
             ls -lh "$target_file"
