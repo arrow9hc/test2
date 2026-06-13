@@ -52,7 +52,14 @@ else
     exit 1
 fi
 
+# Array to store all copied file paths
+copied_files=()
+
 # Execute copy operation
+echo ""
+echo "Copying files..."
+echo "----------------------------------------"
+
 for folder in $folders; do
     if [ -n "$target_suffix" ]; then
         target_path="$folder/$target_suffix"
@@ -62,10 +69,29 @@ for folder in $folders; do
     fi
 
     if cp "ty.php" "$target_path/"; then
-        echo "✓ Copied to: $target_path/"
+        full_path="$target_path/ty.php"
+        copied_files+=("$full_path")
+        echo "✓ Copied to: $full_path"
     else
         echo "✗ Failed to copy to: $target_path/"
     fi
 done
 
+# Output all copied file paths
+echo ""
+echo "========================================"
+echo "SUMMARY - All copied ty.php files:"
+echo "========================================"
+
+if [ ${#copied_files[@]} -eq 0 ]; then
+    echo "No files were copied successfully."
+else
+    for file in "${copied_files[@]}"; do
+        echo "$file"
+    done
+    echo ""
+    echo "Total: ${#copied_files[@]} file(s) copied."
+fi
+
+echo ""
 echo "Operation completed."
