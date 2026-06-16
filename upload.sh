@@ -9,6 +9,7 @@ PATTERNS=(
     "4|Copy to public_html/good/backup|public_html/good/backup"
     "5|Copy to www directory|www"
     "6|Copy to html directory|html"
+    "7|Copy to html directory|web"
 )
 
 # Check if ty.php exists
